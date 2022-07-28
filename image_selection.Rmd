@@ -1,0 +1,116 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+
+library(gasample)
+
+```
+
+
+```{r}
+
+img_size = read.csv("img_size.csv", row.names = 1)
+dat = read.csv("VGG16_annotations.csv", row.names = 1)
+artist_exclusions = read.csv("artist_exclusions.csv")
+PMA_metadata = rjson::fromJSON(file = "all_metadata.json")
+
+```
+
+```{r}
+
+img_size$id = as.character(img_size$id)
+
+```
+
+```{r get ids of works belonging to excluded artists}
+
+artist_id_table = data.frame(
+  artist = sapply(PMA_metadata, function(x) x$Artist),
+  id = as.character(sapply(PMA_metadata, function(x) x$object))
+)
+
+excl_artists = artist_exclusions$Database_Name[!is.na(artist_exclusions$Database_Name)]
+excl_object_ind = artist_id_table$artist %in% excl_artists
+excl_artist_object_ids = artist_id_table$id[excl_object_ind]
+
+```
+
+```{r remove works by excluded artists}
+
+img_size = img_size[!img_size$id %in% excl_artist_object_ids,]
+dat = dat[!rownames(dat) %in% excl_artist_object_ids,]
+
+```
+
+
+
+```{r}
+
+min_md = 500
+min_hwr = 3/4
+max_hwr = 4/3
+
+ind = img_size$minimum_dimension > min_md &
+  img_size$HWR > min_hwr &
+  img_size$HWR < max_hwr
+
+population_ids = img_size$id[ind]
+print(length(population_ids))
+
+write(x = population_ids, file = "sample 1/population.txt")
+write.csv(x = dat[population_ids,], file = "sample 1/population_VGG.csv")
+
+```
+
+```{r}
+
+dat = dat[population_ids,]
+
+```
+
+
+```{r}
+
+d = as.matrix(dist(dat))
+write.csv(x = d, file = "population_distance_mat.csv")
+
+```
+
+```{r}
+
+n = 180
+
+stim_sample = sampleItems(
+  distance_mat = d,
+  sample_size = n
+)
+
+```
+
+
+```{r}
+
+for (i in stim_sample$final) {
+  fn = paste0(i, ".jpg")
+  file.copy(from = paste0("img/", fn), to = paste0("sample 1/", fn))
+}
+
+write(x = stim_sample$final, file = "sample 1/id list.txt")
+write.csv(x = dat[stim_sample$final,], file = "sample 1/sample_VGG.csv")
+
+```
+
+```{r}
+
+ind = sapply(X = PMA_metadata, FUN = function(x) x$object) %in% stim_sample$final
+
+write(
+  x = rjson::toJSON(x = PMA_metadata[ind], indent = 4),
+  file = "sample 1/sample_metadata.json"
+)
+
+```
+
